@@ -1,0 +1,132 @@
+plugins {
+    id 'java'
+}
+
+class KeepTryingExec extends Exec {
+    KeepTryingExec() {
+        super()
+        ignoreExitValue = true
+    }
+
+    @Override
+    protected void exec() {
+        super.exec()
+        while(getExecResult().exitValue != 0) {
+            sleep 1000
+            super.exec()
+        }
+    }
+}
+
+task generate(type:JavaExec) {
+    inputs.files 'model.uml'
+    outputs.dir 'cpp'
+    classpath = files("{{ codegenPath }}/bin/umlrtgen.jar")
+    args '-l', 'SEVERE', '-p', '{{ codegenPath }}/plugins', '-o', './cpp', './model.uml'
+}
+
+task containerize(type:Exec) {
+    dependsOn 'generate'
+    inputs.dir 'cpp'
+    inputs.files 'Dockerfile'
+    outputs.files '.image'
+    commandLine 'docker', 'build', '-q', '-t', '{{ imageName }}', '.'
+    standardOutput new ByteArrayOutputStream()
+
+    doLast {
+        file('.image').text = standardOutput.toString().substring(7, 7 + 4)
+    }
+}
+
+task publish(type:Exec) {
+    dependsOn 'containerize'
+    inputs.files '.image'
+    outputs.files '.push'
+    commandLine 'docker', 'push', '{{ imageName }}'
+
+    doLast {
+        file('.push').text = file('.image').text
+    }
+}
+
+task deployService {
+    dependsOn ':deployNamespace'
+    inputs.files 'service.yaml'
+    outputs.files '.service'
+
+    onlyIf {
+        file('service.yaml')?.exists()
+    }
+
+    doFirst {
+        exec {
+            commandLine 'kubectl', 'delete', '--namespace', '{{ namespace }}', 'service', '{{ partName }}'
+            ignoreExitValue true
+        }
+    }
+
+    doLast {
+        exec {
+            commandLine 'kubectl', 'apply', '-f', 'service.yaml'
+        }
+
+        file('.service').text = '{{ partName }}'
+    }
+}
+
+task deploy {
+    dependsOn 'publish', 'deployService', ':deployNamespace', ':deployServices', ':deployRoles'
+    inputs.files 'deployment.yaml', '.push'
+    outputs.files '.deployment'
+
+    doFirst {
+        exec {
+            commandLine 'kubectl', 'delete', '--namespace', '{{ namespace }}', 'deployment', '{{ partName }}'
+            ignoreExitValue true
+        }
+    }
+
+    doLast {
+        exec {
+            commandLine 'kubectl', 'apply', '-f', 'deployment.yaml'
+        }
+
+        file('.deployment').text = file('.image').text
+    }
+}
+
+task monitor(type:KeepTryingExec) {
+    dependsOn 'deploy'
+    commandLine 'kubectl', 'logs', '--namespace', '{{ namespace }}', '--tail', '-1', '-lname={{ partName }}', '-f'
+}
+
+task tearDown(type:Exec) {
+    commandLine 'kubectl', 'delete', '--namespace', '{{ namespace }}', 'deployments,services', '{{ partName }}'
+    ignoreExitValue true
+
+    doLast {
+        delete '.service', '.deployment'
+    }
+}
+
+task deleteImage {
+    doLast {
+        def imageFile = file('.image')
+        if(imageFile.exists()) {
+            exec {
+                commandLine 'docker', 'rmi', file('.image').text
+                ignoreExitValue true
+            }
+        }
+    }
+}
+
+task cleanUp {
+    dependsOn 'deleteImage'
+    doLast {
+        delete 'cpp', '.image', '.push', '.service', '.deployment'
+    }
+}
+
+clean.dependsOn 'cleanUp'
+build.dependsOn 'containerize'

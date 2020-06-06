@@ -1,0 +1,16 @@
+plugins {
+    id 'java'
+}
+
+task generate(type:JavaExec) {
+    inputs.files 'model.uml'
+    outputs.dir 'cpp'
+    classpath = files("{{ codegenPath }}/bin/umlrtgen.jar")
+    args '-p', '{{ codegenPath }}/plugins', '-o', './cpp', './model.uml'
+}
+
+clean.doFirst {
+    delete 'cpp'
+}
+
+build.dependsOn "generate"

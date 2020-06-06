@@ -1,0 +1,48 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: {{ namespace }} 
+  name: reader
+rules:
+- apiGroups: ["", "apps", "extensions"]
+  resources: ["pods", "deployments"]
+  verbs: ["get", "watch", "list"]
+  
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read
+  namespace: {{ namespace }} 
+subjects:
+- kind: ServiceAccount
+  name: default
+roleRef:
+  kind: Role
+  name: reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: {{ namespace }} 
+  name: scaler
+rules:
+  - apiGroups: ["", "apps", "extensions"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scale
+  namespace: {{ namespace }} 
+subjects:
+  - kind: ServiceAccount
+    name: default
+roleRef:
+  kind: Role
+  name: scaler
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,2 @@
+rootProject.name = '{{ namespace }}'
+include {% for part in partNames %}'{{ part }}'{% if not loop.last %},{% endif %}{% endfor %}

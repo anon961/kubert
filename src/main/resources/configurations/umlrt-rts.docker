@@ -1,0 +1,8 @@
+FROM alpine:3.9
+RUN apk update
+RUN apk add g++
+RUN apk add make
+ENV UMLRTS_ROOT /umlrts
+COPY ./umlrts /umlrts
+WORKDIR /umlrts
+RUN make

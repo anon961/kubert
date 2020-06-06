@@ -1,0 +1,5 @@
+FROM kjahed/umlrt-rts:1.0
+COPY ./cpp/src /app
+WORKDIR /app
+RUN make
+ENTRYPOINT flock -n /var/lock/app.lock /app/{{ topName }}Main {{ arguments }} 2>&1 | tee logfile

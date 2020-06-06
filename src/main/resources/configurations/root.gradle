@@ -1,0 +1,67 @@
+plugins {
+    id 'java'
+}
+
+task deployNamespace {
+    inputs.files 'namespace.yaml'
+    outputs.files '.namespace'
+
+    doLast {
+        exec {
+            commandLine 'kubectl', 'apply', '-f', 'namespace.yaml'
+        }
+
+        file('.namespace').text = '{{ namespace }}'
+    }
+}
+
+task deployRoles {
+    dependsOn 'deployNamespace'
+    inputs.files 'roles.yaml'
+    outputs.files '.roles'
+
+    doLast {
+        exec {
+            commandLine 'kubectl', 'apply', '-f', 'roles.yaml'
+        }
+
+        file('.roles').text = '{{ namespace }}'
+    }
+}
+
+task deploy {
+
+}
+
+task deployServices {
+
+}
+
+task run(type:Exec) {
+    dependsOn 'deploy'
+    commandLine 'kubectl', '--namespace', '{{ namespace }}', 'scale', 'deployment', '-ltop=true', '--replicas=1'
+}
+
+task stop(type:Exec) {
+    commandLine 'kubectl', '--namespace', '{{ namespace }}', 'scale', 'deployment', '-lapp={{ appName }}', '--replicas=0'
+    ignoreExitValue true
+}
+
+task tearDown(type:Exec) {
+    commandLine 'kubectl', 'delete', 'namespaces', '{{ namespace }}'
+    ignoreExitValue true
+
+    doLast {
+        delete '.namespace', '.roles'
+    }
+}
+
+clean.doLast {
+    delete '.namespace', '.roles'
+}
+
+subprojects {
+    rootProject.clean.dependsOn getTasks().matching {it.name == 'clean'}
+    rootProject.deploy.dependsOn getTasks().matching {it.name == 'deploy'}
+    rootProject.deployServices.dependsOn getTasks().matching {it.name == 'deployService'}
+}

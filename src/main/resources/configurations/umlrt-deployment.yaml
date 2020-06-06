@@ -1,0 +1,53 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ partName }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ appName }}
+    {%- if not parentName is empty %}
+    parent: {{ parentName }}
+    {%- endif %}
+    top: {% if isTop %}"true"{% else %}"false"{% endif %}
+    optional: {% if optional %}"true"{% else %}"false"{% endif %}
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      name: {{ partName }}
+  template:
+    metadata:
+      labels:
+        name: {{ partName }}
+        app: {{ appName }}
+        {%- if not parentName is empty %}
+        parent: {{ parentName }}
+        {%- endif %}
+    spec:
+      containers:
+        - name: {{ partName }}
+          image: {{ imageName }}
+          {%- if hasChildren or hasFixedChildren %}
+          lifecycle:
+            {%- if hasFixedChildren %}
+            postStart:
+              exec:
+                command:
+                - "sh"
+                - "-c"
+                - >
+                  kubectl scale deployment -lparent={{ partName }},optional=false --replicas=1;
+                  kubectl wait --for=condition=ready pod -lparent={{ partName }}
+            {%- endif %}
+            {%- if hasChildren %}
+            preStop:
+              exec:
+                command:
+                  - "sh"
+                  - "-c"
+                  - >
+                    kubectl scale deployment -lparent={{ partName }} --replicas=0;
+            {%- endif %}
+          {%- endif %}
+      terminationGracePeriodSeconds: 3
